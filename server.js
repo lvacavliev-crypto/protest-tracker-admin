@@ -8,7 +8,7 @@ const app = express();
 
 // --- CONFIGURATION ---
 const pool = new Pool({
-  connectionString: process.env.PROTEST_URL,
+  connectionString: process.env.PROTEST_URL + "?sslmode=require", // Add sslmode=require
   ssl: {
     rejectUnauthorized: false
   }
@@ -23,6 +23,10 @@ async function initializeDb() {
   let client;
   try {
     client = await pool.connect();
+    // Grant permissions - this is the key fix for Vercel Hobby tier
+    await client.query(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "${process.env.PGUSER}";`);
+    await client.query(`GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "${process.env.PGUSER}";`);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS organizers (
         id SERIAL PRIMARY KEY,
@@ -56,8 +60,6 @@ async function initializeDb() {
     console.log('Database tables are successfully initialized.');
   } catch (err) {
     console.error('FATAL: Error initializing database tables:', err.stack);
-    // If the DB fails to init, we shouldn't continue.
-    // This will help Vercel logs show the exact problem.
     throw err; 
   } finally {
     if (client) {
@@ -210,8 +212,4 @@ app.get('/', (req, res) => {
 });
 
 module.exports = app;
-
-
-
-
 
