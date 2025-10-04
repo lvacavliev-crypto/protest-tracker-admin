@@ -1,21 +1,20 @@
 const { Pool } = require('pg');
 
-// Create one single pool instance.
+// Create a single, shared connection pool.
+// Vercel provides the full, correct connection string in the environment variable.
 const pool = new Pool({
   connectionString: process.env.PROTEST_URL,
-  connectionTimeoutMillis: 15000,
 });
 
-// A global promise to ensure initialization only runs once.
-let initializationPromise = null;
+// A global promise to ensure the setup runs only once per server instance.
+let dbInitializationPromise = null;
 
-async function initializeDb() {
-  let client;
+async function initializeDatabase() {
+  console.log('Attempting to connect to the database...');
+  const client = await pool.connect();
+  console.log('Database connection successful. Ensuring tables exist...');
   try {
-    console.log("Attempting to connect to the database...");
-    client = await pool.connect();
-    console.log("Database connection successful. Ensuring tables exist...");
-
+    // Create the organizers table if it doesn't exist
     await client.query(`
       CREATE TABLE IF NOT EXISTS organizers (
         id SERIAL PRIMARY KEY,
@@ -28,7 +27,7 @@ async function initializeDb() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    
+    // Create the protests table if it doesn't exist
     await client.query(`
       CREATE TABLE IF NOT EXISTS protests (
         id SERIAL PRIMARY KEY,
@@ -47,26 +46,27 @@ async function initializeDb() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('Database initialization complete. The server is ready to accept requests.');
-  } catch (err) {
-    console.error('FATAL: Database initialization failed.', err.stack);
-    throw new Error(`Database initialization failed: ${err.message}`);
+    console.log('Database tables are ready.');
+  } catch (error) {
+    console.error('FATAL: Database initialization failed:', error);
+    throw error; // Propagate the error to stop the serverless function
   } finally {
-    if (client) {
-      client.release();
-    }
+    client.release(); // Release the client back to the pool
   }
 }
 
-const ensureDbIsReady = () => {
-  if (!initializationPromise) {
-    initializationPromise = initializeDb();
+// This function ensures the database is initialized before any query is made.
+async function ensureDbReady() {
+  if (!dbInitializationPromise) {
+    dbInitializationPromise = initializeDatabase();
   }
-  return initializationPromise;
+  return dbInitializationPromise;
+}
+
+module.exports = {
+  // A simple query function that uses the shared pool
+  query: (text, params) => pool.query(text, params),
+  // The function to ensure the database is ready
+  ensureDbReady,
 };
 
-// Export a query function and the initialization function
-module.exports = {
-  query: (text, params) => pool.query(text, params),
-  ensureDbIsReady,
-};
