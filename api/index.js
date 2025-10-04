@@ -2,10 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('./db'); // Import the new database module
+const db = require('./db'); // Import our new, simplified database module
 
 const app = express();
-
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-for-local-dev';
 
 app.use(cors());
@@ -151,16 +150,19 @@ app.get('/api/protests', async (req, res) => {
 
 // A simple health check endpoint
 app.get('/api', (req, res) => {
-  res.send('Protest Tracker API is running.');
+  res.send('Protest Tracker API is running and ready.');
 });
 
-// --- SERVERLESS WRAPPER FOR VERCEL ---
+// The main serverless function handler
 module.exports = async (req, res) => {
   try {
-    await db.ensureDbIsReady();
+    // Ensure the database is initialized before handling any request.
+    await db.ensureDbReady();
+    // Pass the request to the Express app.
     app(req, res);
   } catch (error) {
-    console.error("Critical error in serverless handler:", error.stack);
+    // This will catch the critical initialization failure and report it.
+    console.error("CRITICAL: Serverless handler failed to initialize database.", error);
     res.status(500).json({ 
         message: "Server failed to initialize.", 
         error: error.message 
