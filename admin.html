@@ -85,10 +85,10 @@
         <div id="register" class="page max-w-md mx-auto">
              <h2 class="text-3xl font-bold text-center mb-6">Регистрирайте вашата организация</h2>
              <form id="registerForm" class="space-y-6">
-                <div><label for="regName" class="block text-sm font-bold mb-2">Име на организацията</label><input type="text" id="regName" class="w-full p-3 rounded form-input" required></div>
-                <div><label for="regEmail" class="block text-sm font-bold mb-2">Имейл адрес</label><input type="email" id="regEmail" class="w-full p-3 rounded form-input" required></div>
-                <div><label for="regPassword" class="block text-sm font-bold mb-2">Парола</label><input type="password" id="regPassword" class="w-full p-3 rounded form-input" required></div>
-                <div><label for="regBio" class="block text-sm font-bold mb-2">Биография / Мисия</label><textarea id="regBio" rows="3" class="w-full p-3 rounded form-input"></textarea></div>
+                <div><label for="regName" class="block text-sm font-bold mb-2">Име на организацията</label><input type="text" id="regName" name="name" class="w-full p-3 rounded form-input" required></div>
+                <div><label for="regEmail" class="block text-sm font-bold mb-2">Имейл адрес</label><input type="email" id="regEmail" name="email" class="w-full p-3 rounded form-input" required></div>
+                <div><label for="regPassword" class="block text-sm font-bold mb-2">Парола</label><input type="password" id="regPassword" name="password" class="w-full p-3 rounded form-input" required></div>
+                <div><label for="regBio" class="block text-sm font-bold mb-2">Биография / Мисия</label><textarea id="regBio" name="bio" rows="3" class="w-full p-3 rounded form-input"></textarea></div>
                 <button type="submit" class="w-full bg-[#FF2D2D] text-white font-bold py-3 px-4 rounded-lg text-lg uppercase tracking-wider hover:bg-red-700">Създайте акаунт</button>
              </form>
              <div id="registerStatus" class="mt-4 text-center"></div>
@@ -98,8 +98,8 @@
         <div id="login" class="page max-w-md mx-auto">
             <h2 class="text-3xl font-bold text-center mb-6">Вход за организатори</h2>
             <form id="loginForm" class="space-y-6">
-                <div><label for="loginEmail" class="block text-sm font-bold mb-2">Имейл</label><input type="email" id="loginEmail" class="w-full p-3 rounded form-input" required></div>
-                <div><label for="loginPassword" class="block text-sm font-bold mb-2">Парола</label><input type="password" id="loginPassword" class="w-full p-3 rounded form-input" required></div>
+                <div><label for="loginEmail" class="block text-sm font-bold mb-2">Имейл</label><input type="email" id="loginEmail" name="email" class="w-full p-3 rounded form-input" required></div>
+                <div><label for="loginPassword" class="block text-sm font-bold mb-2">Парола</label><input type="password" id="loginPassword" name="password" class="w-full p-3 rounded form-input" required></div>
                 <button type="submit" class="w-full bg-[#FF2D2D] text-white font-bold py-3 px-4 rounded-lg text-lg uppercase tracking-wider hover:bg-red-700">Вход</button>
             </form>
             <div id="loginStatus" class="mt-4 text-center"></div>
@@ -152,8 +152,8 @@
                         <div><label for="time" class="block text-sm font-bold mb-1">Час</label><input type="time" id="time" name="time" class="w-full p-2 rounded form-input" required></div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label for="lat" class="block text-sm font-bold mb-1">Географска ширина</label><input type="text" id="lat" name="lat" class="w-full p-2 rounded form-input" required></div>
-                        <div><label for="lng" class="block text-sm font-bold mb-1">Географска дължина</label><input type="text" id="lng" name="lng" class="w-full p-2 rounded form-input" required></div>
+                        <div><label for="lat" class="block text-sm font-bold mb-1">Географска ширина</label><input type="number" step="any" id="lat" name="latitude" class="w-full p-2 rounded form-input" required></div>
+                        <div><label for="lng" class="block text-sm font-bold mb-1">Географска дължина</label><input type="number" step="any" id="lng" name="longitude" class="w-full p-2 rounded form-input" required></div>
                     </div>
                     <div><label for="official_link" class="block text-sm font-bold mb-1">Официален линк</label><input type="url" id="official_link" name="official_link" class="w-full p-2 rounded form-input"></div>
                     <div><label for="tags" class="block text-sm font-bold mb-1">Етикети (разделени със запетая)</label><input type="text" id="tags" name="tags" class="w-full p-2 rounded form-input"></div>
@@ -169,7 +169,7 @@
     
     <script>
         // --- CONFIG ---
-        const backendUrl = 'http://localhost:3001/api';
+        const backendUrl = '/api'; 
 
         // --- DOM ELEMENTS ---
         const pages = document.querySelectorAll('.page');
@@ -187,19 +187,25 @@
             const activePage = document.getElementById(hash.substring(1)) || document.getElementById('home');
             activePage.classList.add('active');
             
-            if (hash === '#dashboard' && localStorage.getItem('organizerId')) {
+            if (hash === '#dashboard' && localStorage.getItem('token')) {
                 loadDashboard();
-            } else if (hash === '#dashboard' && !localStorage.getItem('organizerId')) {
+            } else if (hash === '#dashboard' && !localStorage.getItem('token')) {
                 window.location.hash = '#login';
             }
         }
 
         window.addEventListener('hashchange', () => navigate(window.location.hash));
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                window.location.hash = this.getAttribute('href');
+            });
+        });
         
         // --- AUTH & UI STATE ---
         function updateUIForAuthState() {
-            const organizerId = localStorage.getItem('organizerId');
-            if (organizerId) {
+            const token = localStorage.getItem('token');
+            if (token) {
                 navLinks.login.style.display = 'none';
                 navLinks.register.style.display = 'none';
                 navLinks.dashboard.style.display = 'inline-block';
@@ -211,52 +217,67 @@
                 navLinks.logout.style.display = 'none';
             }
         }
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('organizerId');
+            updateUIForAuthState();
+            window.location.hash = '#home';
+        }
+
+        navLinks.logout.addEventListener('click', logout);
         
         // --- DASHBOARD LOGIC ---
         async function loadDashboard() {
             const organizerId = localStorage.getItem('organizerId');
-            if (!organizerId) return;
+            const token = localStorage.getItem('token');
+            if (!organizerId || !token) return;
 
-            const [orgRes, protestsRes, analyticsRes] = await Promise.all([
-                fetch(`${backendUrl}/organizers/${organizerId}`),
-                fetch(`${backendUrl}/organizers/${organizerId}/protests`),
-                fetch(`${backendUrl}/organizers/${organizerId}/analytics`)
-            ]);
-            
-            if (!orgRes.ok || !protestsRes.ok) {
-                logout();
-                return;
-            }
-            
-            const organizer = await orgRes.json();
-            const protests = await protestsRes.json();
-            const analytics = await analyticsRes.json();
-            
-            document.getElementById('orgName').textContent = organizer.name;
-            document.getElementById('followerCount').textContent = analytics.followers;
-            document.getElementById('interestCount').textContent = analytics.total_likes;
-            document.getElementById('clickCount').textContent = analytics.social_clicks;
-            
-            const upcomingContainer = document.getElementById('upcomingProtests');
-            const pastContainer = document.getElementById('pastProtests');
-            upcomingContainer.innerHTML = '';
-            pastContainer.innerHTML = '';
-            
-            const now = new Date();
-            protests.forEach(p => {
-                const protestDate = new Date(p.date);
-                const isUpcoming = protestDate >= now;
-                const container = isUpcoming ? upcomingContainer : pastContainer;
-                container.innerHTML += createProtestCard(p, isUpcoming);
-            });
-
-             document.querySelectorAll('.edit-btn').forEach(button => {
-                button.addEventListener('click', (e) => {
-                    const protestId = e.target.closest('.edit-btn').dataset.id;
-                    const protestToEdit = protests.find(p => p.id == protestId);
-                    openProtestModal(protestToEdit);
+            try {
+                const [orgRes, protestsRes, analyticsRes] = await Promise.all([
+                    fetch(`${backendUrl}/organizers/${organizerId}`, { headers: {'x-auth-token': token} }),
+                    fetch(`${backendUrl}/organizers/${organizerId}/protests`, { headers: {'x-auth-token': token} }),
+                    fetch(`${backendUrl}/organizers/${organizerId}/analytics`, { headers: {'x-auth-token': token} })
+                ]);
+                
+                if (orgRes.status === 401 || protestsRes.status === 401) {
+                    logout();
+                    return;
+                }
+                
+                const organizer = await orgRes.json();
+                const protests = await protestsRes.json();
+                const analytics = await analyticsRes.json();
+                
+                document.getElementById('orgName').textContent = organizer.name;
+                document.getElementById('followerCount').textContent = analytics.followers;
+                document.getElementById('interestCount').textContent = analytics.total_likes;
+                document.getElementById('clickCount').textContent = analytics.social_clicks;
+                
+                const upcomingContainer = document.getElementById('upcomingProtests');
+                const pastContainer = document.getElementById('pastProtests');
+                upcomingContainer.innerHTML = '';
+                pastContainer.innerHTML = '';
+                
+                const now = new Date();
+                protests.forEach(p => {
+                    const protestDate = new Date(p.date);
+                    const isUpcoming = protestDate >= now;
+                    const container = isUpcoming ? upcomingContainer : pastContainer;
+                    container.innerHTML += createProtestCard(p, isUpcoming);
                 });
-            });
+
+                document.querySelectorAll('.edit-btn').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const protestId = e.target.closest('.edit-btn').dataset.id;
+                        const protestToEdit = protests.find(p => p.id == protestId);
+                        openProtestModal(protestToEdit);
+                    });
+                });
+            } catch (error) {
+                console.error("Failed to load dashboard:", error);
+                logout();
+            }
         }
         
         function createProtestCard(protest, isUpcoming) {
@@ -265,21 +286,21 @@
                 <div class="bg-[#28282f] p-4 rounded-lg flex justify-between items-center">
                     <div>
                         <p class="font-bold text-lg">${protest.name}</p>
-                        <p class="text-sm text-gray-400">${protestDate} в ${protest.time}</p>
+                        <p class="text-sm text-gray-400">${protestDate} at ${protest.time}</p>
                     </div>
                     ${isUpcoming ? `<button data-id="${protest.id}" class="edit-btn bg-[#4A4A4A] hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">Редактирай</button>` : ''}
                 </div>
             `;
         }
-        
+
         // --- MODAL LOGIC ---
         function openProtestModal(protest = null) {
             const form = document.getElementById('protestForm');
             form.reset();
             document.getElementById('formStatus').textContent = '';
-            
+            const modalTitle = document.getElementById('modalTitle');
             if (protest) {
-                document.getElementById('modalTitle').textContent = 'Редактиране на протест';
+                modalTitle.textContent = 'Редактирай протест';
                 document.getElementById('protestId').value = protest.id;
                 document.getElementById('name').value = protest.name;
                 document.getElementById('cause').value = protest.cause;
@@ -287,12 +308,12 @@
                 document.getElementById('description').value = protest.description;
                 document.getElementById('date').value = new Date(protest.date).toISOString().split('T')[0];
                 document.getElementById('time').value = protest.time;
-                document.getElementById('lat').value = protest.lat;
-                document.getElementById('lng').value = protest.lng;
+                document.getElementById('lat').value = protest.latitude;
+                document.getElementById('lng').value = protest.longitude;
                 document.getElementById('official_link').value = protest.official_link;
                 document.getElementById('tags').value = protest.tags ? protest.tags.join(', ') : '';
             } else {
-                document.getElementById('modalTitle').textContent = 'Добавяне на нов протест';
+                modalTitle.textContent = 'Добави нов протест';
                 document.getElementById('protestId').value = '';
             }
             modal.style.display = 'flex';
@@ -304,19 +325,17 @@
         
         document.getElementById('addProtestBtn').addEventListener('click', () => openProtestModal());
         document.getElementById('cancelBtn').addEventListener('click', closeModal);
-        modal.querySelector('.modal-backdrop').addEventListener('click', closeModal);
+        document.querySelector('.modal-backdrop').addEventListener('click', closeModal);
 
-        // --- API CALLS ---
-        
+        // --- FORM SUBMISSIONS ---
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const statusEl = document.getElementById('registerStatus');
-            const data = {
-                name: document.getElementById('regName').value,
-                email: document.getElementById('regEmail').value,
-                password: document.getElementById('regPassword').value,
-                bio: document.getElementById('regBio').value
-            };
+            const statusDiv = document.getElementById('registerStatus');
+            statusDiv.textContent = 'Registering...';
+            statusDiv.style.color = 'white';
+
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
             
             try {
                 const res = await fetch(`${backendUrl}/organizers/register`, {
@@ -324,84 +343,99 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
-                if (!res.ok) throw new Error((await res.json()).message);
-                
-                statusEl.textContent = 'Регистрацията е успешна! Моля, влезте в профила си.';
-                statusEl.style.color = '#A3D5E7';
-                setTimeout(() => window.location.hash = '#login', 2000);
+
+                if (res.ok) {
+                    statusDiv.textContent = 'Успешна регистрация! Моля, влезте.';
+                    statusDiv.style.color = 'lightgreen';
+                    setTimeout(() => window.location.hash = '#login', 1500);
+                } else {
+                    const error = await res.json();
+                    statusDiv.textContent = error.message;
+                    statusDiv.style.color = 'salmon';
+                }
             } catch (err) {
-                statusEl.textContent = err.message;
-                statusEl.style.color = '#FF2D2D';
+                console.error("Fetch Error:", err);
+                statusDiv.textContent = 'Failed to connect to server. Please try again later.';
+                statusDiv.style.color = 'salmon';
             }
         });
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const statusEl = document.getElementById('loginStatus');
-            const data = {
-                email: document.getElementById('loginEmail').value,
-                password: document.getElementById('loginPassword').value
-            };
-
+            const statusDiv = document.getElementById('loginStatus');
+            statusDiv.textContent = 'Logging in...';
+            statusDiv.style.color = 'white';
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            
             try {
                 const res = await fetch(`${backendUrl}/organizers/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
-                if (!res.ok) throw new Error((await res.json()).message);
-                const result = await res.json();
-                
-                localStorage.setItem('organizerId', result.organizer.id);
-                updateUIForAuthState();
-                window.location.hash = '#dashboard';
+
+                if (res.ok) {
+                    const { token, organizerId } = await res.json();
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('organizerId', organizerId);
+                    updateUIForAuthState();
+                    window.location.hash = '#dashboard';
+                } else {
+                    statusDiv.textContent = 'Невалидни данни.';
+                    statusDiv.style.color = 'salmon';
+                }
             } catch (err) {
-                statusEl.textContent = err.message;
-                statusEl.style.color = '#FF2D2D';
+                console.error("Fetch Error:", err);
+                statusDiv.textContent = 'Failed to connect to server. Please try again later.';
+                statusDiv.style.color = 'salmon';
             }
         });
-
-        function logout() {
-            localStorage.removeItem('organizerId');
-            updateUIForAuthState();
-            window.location.hash = '#home';
-        }
-        navLinks.logout.addEventListener('click', logout);
         
         document.getElementById('protestForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const statusDiv = document.getElementById('formStatus');
+            statusDiv.textContent = 'Saving...';
+            statusDiv.style.color = 'white';
             const protestId = document.getElementById('protestId').value;
-            const isEditing = !!protestId;
+            const token = localStorage.getItem('token');
             
             const formData = new FormData(e.target);
             const data = Object.fromEntries(formData.entries());
-            data.tags = data.tags.split(',').map(tag => tag.trim());
-            data.organizer_id = localStorage.getItem('organizerId');
-
-            const url = isEditing ? `${backendUrl}/protests/${protestId}` : `${backendUrl}/protests`;
-            const method = isEditing ? 'PUT' : 'POST';
+            
+            const url = protestId ? `${backendUrl}/protests/${protestId}` : `${backendUrl}/protests`;
+            const method = protestId ? 'PUT' : 'POST';
 
             try {
                 const res = await fetch(url, {
-                    method,
-                    headers: { 'Content-Type': 'application/json' },
+                    method: method,
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-auth-token': token 
+                    },
                     body: JSON.stringify(data)
                 });
-                if (!res.ok) throw new Error((await res.json()).message);
-                
-                document.getElementById('formStatus').textContent = `Протестът е ${isEditing ? 'актуализиран' : 'създаден'}!`;
-                loadDashboard();
-                setTimeout(closeModal, 1500);
-            } catch (err) {
-                 document.getElementById('formStatus').textContent = err.message;
+
+                if (res.ok) {
+                    statusDiv.textContent = 'Протестът е запазен!';
+                    statusDiv.style.color = 'lightgreen';
+                    loadDashboard();
+                    setTimeout(closeModal, 1000);
+                } else {
+                    const error = await res.json();
+                    statusDiv.textContent = error.message;
+                    statusDiv.style.color = 'salmon';
+                }
+            } catch(err) {
+                console.error("Fetch Error:", err);
+                statusDiv.textContent = 'Failed to connect to server. Please try again later.';
+                statusDiv.style.color = 'salmon';
             }
         });
 
-        // --- INITIALIZATION ---
-        document.addEventListener('DOMContentLoaded', () => {
-            updateUIForAuthState();
-            navigate(window.location.hash || '#home');
-        });
+        // --- INITIAL LOAD ---
+        updateUIForAuthState();
+        navigate(window.location.hash || '#home');
     </script>
 </body>
 </html>
