@@ -7,13 +7,11 @@ const jwt = require('jsonwebtoken');
 const app = express();
 
 // --- CONFIGURATION ---
+// Vercel provides the full, correct connection string. We don't need to add anything to it.
 const pool = new Pool({
-  connectionString: process.env.PROTEST_URL + "?sslmode=require",
-  ssl: {
-    rejectUnauthorized: false
-  },
-  // Add a longer timeout to give the database time to "wake up" on Vercel
-  connectionTimeoutMillis: 10000, 
+  connectionString: process.env.PROTEST_URL,
+  // Add a timeout to prevent the server from waiting indefinitely if the DB is truly down.
+  connectionTimeoutMillis: 15000, 
 });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-for-local-dev';
@@ -22,14 +20,17 @@ app.use(cors());
 app.use(express.json());
 
 // --- DATABASE INITIALIZATION ---
-// This function will run once to prepare the database.
+// A global promise to ensure initialization only runs once.
+let initializationPromise = null;
+
 async function initializeDb() {
   let client;
   try {
     console.log("Attempting to connect to the database...");
     client = await pool.connect();
-    console.log("Database connection successful. Creating tables if they don't exist...");
+    console.log("Database connection successful. Ensuring tables exist...");
 
+    // Create tables if they don't exist.
     await client.query(`
       CREATE TABLE IF NOT EXISTS organizers (
         id SERIAL PRIMARY KEY,
@@ -61,10 +62,9 @@ async function initializeDb() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('Database initialization complete. The server is ready.');
+    console.log('Database initialization complete. The server is ready to accept requests.');
   } catch (err) {
-    console.error('FATAL: Could not initialize database.', err.stack);
-    // This makes the exact error visible in Vercel logs for easier debugging.
+    console.error('FATAL: Database initialization failed.', err.stack);
     throw new Error(`Database initialization failed: ${err.message}`);
   } finally {
     if (client) {
@@ -73,10 +73,9 @@ async function initializeDb() {
   }
 }
 
-// --- API ENDPOINTS (defined before initialization) ---
+// --- API ENDPOINTS ---
 
 app.post('/api/organizers/register', async (req, res) => {
-    // ... endpoint logic from previous version
     const { name, email, password, bio } = req.body;
     if (!name || !email || !password) {
         return res.status(400).json({ message: 'Missing required fields.' });
@@ -100,7 +99,6 @@ app.post('/api/organizers/register', async (req, res) => {
 });
 
 app.post('/api/organizers/login', async (req, res) => {
-    // ... endpoint logic from previous version
     const { email, password } = req.body;
     try {
         const result = await pool.query('SELECT * FROM organizers WHERE email = $1', [email]);
@@ -121,7 +119,6 @@ app.post('/api/organizers/login', async (req, res) => {
 });
 
 const auth = (req, res, next) => {
-    // ... auth logic from previous version
     const token = req.header('x-auth-token');
     if (!token) {
         return res.status(401).json({ message: 'No token, authorization denied.' });
@@ -136,7 +133,6 @@ const auth = (req, res, next) => {
 };
 
 app.get('/api/organizers/:id', async (req, res) => {
-    // ... endpoint logic from previous version
     try {
         const result = await pool.query('SELECT id, name, email, bio, followers, social_clicks FROM organizers WHERE id = $1', [req.params.id]);
         res.json(result.rows[0]);
@@ -147,7 +143,6 @@ app.get('/api/organizers/:id', async (req, res) => {
 });
 
 app.get('/api/organizers/:id/protests', auth, async (req, res) => {
-    // ... endpoint logic from previous version
     try {
         const result = await pool.query('SELECT * FROM protests WHERE organizer_id = $1 ORDER BY date DESC', [req.organizerId]);
         res.json(result.rows);
@@ -158,7 +153,6 @@ app.get('/api/organizers/:id/protests', auth, async (req, res) => {
 });
 
 app.get('/api/organizers/:id/analytics', auth, async (req, res) => {
-    // ... endpoint logic from previous version
      try {
         const followersRes = await pool.query('SELECT followers FROM organizers WHERE id = $1', [req.organizerId]);
         const likesRes = await pool.query('SELECT SUM(likes) as total_likes FROM protests WHERE organizer_id = $1', [req.organizerId]);
@@ -175,7 +169,6 @@ app.get('/api/organizers/:id/analytics', auth, async (req, res) => {
 });
 
 app.post('/api/protests', auth, async (req, res) => {
-    // ... endpoint logic from previous version
     const { name, cause, description, location, latitude, longitude, date, time, official_link, tags } = req.body;
     const tagsArray = tags ? tags.split(',').map(tag => tag.trim()) : [];
     try {
@@ -191,7 +184,6 @@ app.post('/api/protests', auth, async (req, res) => {
 });
 
 app.put('/api/protests/:id', auth, async (req, res) => {
-    // ... endpoint logic from previous version
     const { name, cause, description, location, latitude, longitude, date, time, official_link, tags } = req.body;
     const tagsArray = tags ? tags.split(',').map(tag => tag.trim()) : [];
     try {
@@ -210,7 +202,6 @@ app.put('/api/protests/:id', auth, async (req, res) => {
 });
 
 app.get('/api/protests', async (req, res) => {
-    // ... endpoint logic from previous version
     try {
         const result = await pool.query('SELECT * FROM protests WHERE date >= CURRENT_DATE ORDER BY date, time');
         res.json(result.rows);
@@ -225,38 +216,28 @@ app.get('/', (req, res) => {
 });
 
 
-// --- SERVERLESS WRAPPER ---
-// This is a more robust way to handle initialization in a serverless environment.
-let isInitialized = false;
-
-// We start the initialization as soon as the file is loaded.
-const initializationPromise = initializeDb()
-    .then(() => {
-        isInitialized = true;
-        console.log("Initialization promise resolved successfully.");
-    })
-    .catch(err => {
-        console.error("Initialization promise rejected:", err);
-        // This makes sure the process exits if the DB fails to init,
-        // which helps Vercel show a proper error log.
-        process.exit(1);
-    });
+// --- SERVERLESS WRAPPER FOR VERCEL ---
+// This ensures the database is ready before any request is handled.
+const ensureDbIsReady = () => {
+  if (!initializationPromise) {
+    initializationPromise = initializeDb();
+  }
+  return initializationPromise;
+};
 
 module.exports = async (req, res) => {
-    // Check if the initialization has finished. If not, wait for it.
-    if (!isInitialized) {
-        try {
-            await initializationPromise;
-        } catch (error) {
-            // This will catch the initialization error and report it.
-            return res.status(500).json({ 
-                message: "Server is starting, but failed to initialize.", 
-                error: error.message 
-            });
-        }
-    }
-    
-    // If we've reached here, the DB is ready. Handle the request.
-    return app(req, res);
+  try {
+    // Wait for the initialization to complete on the first request.
+    // Subsequent requests will resolve immediately.
+    await ensureDbIsReady();
+    // Pass the request to the Express app.
+    app(req, res);
+  } catch (error) {
+    console.error("Critical error in serverless handler:", error.stack);
+    res.status(500).json({ 
+        message: "Server failed to initialize.", 
+        error: error.message 
+    });
+  }
 };
 
