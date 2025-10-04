@@ -7,20 +7,16 @@ const jwt = require('jsonwebtoken');
 const app = express();
 
 // --- CONFIGURATION ---
-// Vercel provides the full, correct connection string. We don't need to add anything to it.
 const pool = new Pool({
   connectionString: process.env.PROTEST_URL,
-  // Add a timeout to prevent the server from waiting indefinitely if the DB is truly down.
   connectionTimeoutMillis: 15000, 
 });
-
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-for-local-dev';
 
 app.use(cors());
 app.use(express.json());
 
 // --- DATABASE INITIALIZATION ---
-// A global promise to ensure initialization only runs once.
 let initializationPromise = null;
 
 async function initializeDb() {
@@ -30,7 +26,6 @@ async function initializeDb() {
     client = await pool.connect();
     console.log("Database connection successful. Ensuring tables exist...");
 
-    // Create tables if they don't exist.
     await client.query(`
       CREATE TABLE IF NOT EXISTS organizers (
         id SERIAL PRIMARY KEY,
@@ -217,7 +212,6 @@ app.get('/', (req, res) => {
 
 
 // --- SERVERLESS WRAPPER FOR VERCEL ---
-// This ensures the database is ready before any request is handled.
 const ensureDbIsReady = () => {
   if (!initializationPromise) {
     initializationPromise = initializeDb();
@@ -227,10 +221,7 @@ const ensureDbIsReady = () => {
 
 module.exports = async (req, res) => {
   try {
-    // Wait for the initialization to complete on the first request.
-    // Subsequent requests will resolve immediately.
     await ensureDbIsReady();
-    // Pass the request to the Express app.
     app(req, res);
   } catch (error) {
     console.error("Critical error in serverless handler:", error.stack);
@@ -240,4 +231,3 @@ module.exports = async (req, res) => {
     });
   }
 };
-
