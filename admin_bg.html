@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protest Tracker Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Work+Sans:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Work Sans', sans-serif; }
+        h1, h2, h3, h4, h5, h6, .font-anton { font-family: 'Anton', sans-serif; text-transform: uppercase; letter-spacing: 0.05em; }
+        .form-input { background-color: #2D2D2D; border: 1px solid #4A4A4A; color: #FFFFFF; }
+        .form-input:focus { outline: none; border-color: #A3D5E7; box-shadow: 0 0 0 3px rgba(163, 213, 231, 0.3); }
+        .page { display: none; }
+        .page.active { display: block; }
+        .modal-backdrop { background-color: rgba(0,0,0,0.7); }
+        .modal-content { background-color: #13131a; }
+        .hero-section {
+            position: relative;
+            background-image: url('https://images.unsplash.com/photo-1596483984555-893d56e269f8?q=80&w=2070&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            padding: 4rem 2rem;
+        }
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(rgba(19, 19, 26, 0.85), rgba(19, 19, 26, 1));
+            z-index: 1;
+        }
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+    </style>
+</head>
+<body class="bg-[#13131a] text-white">
+    
+    <!-- Navigation Bar -->
+    <nav class="bg-[#28282f] p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <a href="#home" class="text-2xl font-anton tracking-wider" style="color: #FF2D2D;">PROTEST TRACKER</a>
+            <div>
+                <a href="#home" class="text-white hover:text-[#A3D5E7] px-3 py-2 rounded-md text-sm font-medium">Начало</a>
+                <a href="#login" id="loginNav" class="text-white hover:text-[#A3D5E7] px-3 py-2 rounded-md text-sm font-medium">Вход</a>
+                <a href="#register" id="registerNav" class="bg-[#FF2D2D] text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-red-700">Регистрация</a>
+                <a href="#dashboard" id="dashboardNav" class="text-white hover:text-[#A3D5E7] px-3 py-2 rounded-md text-sm font-medium" style="display: none;">Табло</a>
+                <button id="logoutBtn" class="bg-[#4A4A4A] text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-gray-600" style="display: none;">Изход</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-8">
+        <!-- Home Page -->
+        <div id="home" class="page active">
+            <div class="hero-section text-center">
+                <div class="hero-content">
+                    <h1 class="text-6xl md:text-7xl font-black mb-4" style="color: #A3D5E7; text-shadow: 2px 2px 8px rgba(0,0,0,0.7);">Дайте сила на вашето движение</h1>
+                    <p class="text-xl mb-8 max-w-3xl mx-auto text-gray-300">Protest Tracker е платформата, създадена да даде гласност на вашата кауза. Регистрирайте вашата организация, публикувайте събитията си и достигнете до отдадена аудитория, готова да направи промяна.</p>
+                    <a href="#register" class="mt-8 inline-block bg-[#FF2D2D] text-white font-bold py-4 px-8 rounded-lg text-xl uppercase tracking-wider hover:bg-red-700 transition-transform hover:scale-105">Започнете сега</a>
+                </div>
+            </div>
+            <div class="grid md:grid-cols-3 gap-8 text-left max-w-5xl mx-auto mt-12">
+                <div class="bg-[#28282f] p-6 rounded-lg border-l-4 border-[#FF2D2D]">
+                    <h2 class="text-2xl font-bold mb-2">Разширете обхвата си</h2>
+                    <p class="text-gray-400">Поставете протеста си на картата – буквално. Нашето приложение показва на потребителите събития в близост, помагайки ви да се свържете с местни поддръжници без усилие.</p>
+                </div>
+                <div class="bg-[#28282f] p-6 rounded-lg border-l-4 border-[#FF2D2D]">
+                    <h2 class="text-2xl font-bold mb-2">Получете статистика</h2>
+                    <p class="text-gray-400">Използвайте таблото си за управление, за да видите колко потребители се интересуват от вашите събития, следват вашата организация и се ангажират с вашето съдържание.</p>
+                </div>
+                <div class="bg-[#28282f] p-6 rounded-lg border-l-4 border-[#FF2D2D]">
+                    <h2 class="text-2xl font-bold mb-2">Управлявайте с лекота</h2>
+                    <p class="text-gray-400">Нашият лесен административен панел ви позволява бързо да добавяте, преглеждате и редактирате вашите протестни обяви, за да можете да се съсредоточите върху най-важното.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Registration Page -->
+        <div id="register" class="page max-w-md mx-auto">
+             <h2 class="text-3xl font-bold text-center mb-6">Регистрирайте вашата организация</h2>
+             <form id="registerForm" class="space-y-6">
+                <div><label for="regName" class="block text-sm font-bold mb-2">Име на организацията</label><input type="text" id="regName" class="w-full p-3 rounded form-input" required></div>
+                <div><label for="regEmail" class="block text-sm font-bold mb-2">Имейл адрес</label><input type="email" id="regEmail" class="w-full p-3 rounded form-input" required></div>
+                <div><label for="regPassword" class="block text-sm font-bold mb-2">Парола</label><input type="password" id="regPassword" class="w-full p-3 rounded form-input" required></div>
+                <div><label for="regBio" class="block text-sm font-bold mb-2">Биография / Мисия</label><textarea id="regBio" rows="3" class="w-full p-3 rounded form-input"></textarea></div>
+                <button type="submit" class="w-full bg-[#FF2D2D] text-white font-bold py-3 px-4 rounded-lg text-lg uppercase tracking-wider hover:bg-red-700">Създайте акаунт</button>
+             </form>
+             <div id="registerStatus" class="mt-4 text-center"></div>
+        </div>
+
+        <!-- Login Page -->
+        <div id="login" class="page max-w-md mx-auto">
+            <h2 class="text-3xl font-bold text-center mb-6">Вход за организатори</h2>
+            <form id="loginForm" class="space-y-6">
+                <div><label for="loginEmail" class="block text-sm font-bold mb-2">Имейл</label><input type="email" id="loginEmail" class="w-full p-3 rounded form-input" required></div>
+                <div><label for="loginPassword" class="block text-sm font-bold mb-2">Парола</label><input type="password" id="loginPassword" class="w-full p-3 rounded form-input" required></div>
+                <button type="submit" class="w-full bg-[#FF2D2D] text-white font-bold py-3 px-4 rounded-lg text-lg uppercase tracking-wider hover:bg-red-700">Вход</button>
+            </form>
+            <div id="loginStatus" class="mt-4 text-center"></div>
+        </div>
+
+        <!-- Dashboard Page -->
+        <div id="dashboard" class="page">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-3xl font-bold">Добре дошли, <span id="orgName"></span>!</h2>
+                <button id="addProtestBtn" class="bg-[#A3D5E7] text-black font-bold py-3 px-5 rounded-lg text-md uppercase tracking-wider hover:opacity-80">+ Добави нов протест</button>
+            </div>
+            
+            <!-- Analytics Section -->
+            <section id="analytics" class="grid md:grid-cols-3 gap-6 mb-10">
+                <div class="bg-[#28282f] p-5 rounded-lg text-center"><p class="text-4xl font-bold font-anton" id="followerCount">0</p><p class="text-gray-400">Общо последователи</p></div>
+                <div class="bg-[#28282f] p-5 rounded-lg text-center"><p class="text-4xl font-bold font-anton" id="interestCount">0</p><p class="text-gray-400">Показани интереси</p></div>
+                <div class="bg-[#28282f] p-5 rounded-lg text-center"><p class="text-4xl font-bold font-anton" id="clickCount">0</p><p class="text-gray-400">Кликания на соц. мрежи</p></div>
+            </section>
+
+            <!-- Protest Lists -->
+            <section>
+                <div>
+                    <h3 class="text-2xl font-bold mb-4 border-b-2 border-[#FF2D2D] pb-2">Предстоящи протести</h3>
+                    <div id="upcomingProtests" class="space-y-4"></div>
+                </div>
+                 <div class="mt-10">
+                    <h3 class="text-2xl font-bold mb-4 border-b-2 border-[#FF2D2D] pb-2">Минали протести</h3>
+                    <div id="pastProtests" class="space-y-4"></div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Modal for Add/Edit Protest -->
+    <div id="protestModal" class="fixed inset-0 z-50 items-center justify-center p-4" style="display: none;">
+        <div class="fixed inset-0 modal-backdrop"></div>
+        <div class="relative w-full max-w-2xl mx-auto mt-10">
+             <div class="modal-content rounded-lg shadow-xl p-8 border-t-4 border-[#FF2D2D]">
+                <h2 id="modalTitle" class="text-2xl font-bold mb-6">Добавяне на нов протест</h2>
+                <form id="protestForm" class="space-y-4 max-h-[70vh] overflow-y-auto pr-4">
+                    <input type="hidden" id="protestId" name="id">
+                    <div><label for="name" class="block text-sm font-bold mb-1">Име на протеста</label><input type="text" id="name" name="name" class="w-full p-2 rounded form-input" required></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label for="cause" class="block text-sm font-bold mb-1">Кауза</label><input type="text" id="cause" name="cause" class="w-full p-2 rounded form-input"></div>
+                        <div><label for="location" class="block text-sm font-bold mb-1">Местоположение</label><input type="text" id="location" name="location" class="w-full p-2 rounded form-input"></div>
+                    </div>
+                    <div><label for="description" class="block text-sm font-bold mb-1">Описание</label><textarea id="description" name="description" rows="3" class="w-full p-2 rounded form-input"></textarea></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label for="date" class="block text-sm font-bold mb-1">Дата</label><input type="date" id="date" name="date" class="w-full p-2 rounded form-input" required></div>
+                        <div><label for="time" class="block text-sm font-bold mb-1">Час</label><input type="time" id="time" name="time" class="w-full p-2 rounded form-input" required></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label for="lat" class="block text-sm font-bold mb-1">Географска ширина</label><input type="text" id="lat" name="lat" class="w-full p-2 rounded form-input" required></div>
+                        <div><label for="lng" class="block text-sm font-bold mb-1">Географска дължина</label><input type="text" id="lng" name="lng" class="w-full p-2 rounded form-input" required></div>
+                    </div>
+                    <div><label for="official_link" class="block text-sm font-bold mb-1">Официален линк</label><input type="url" id="official_link" name="official_link" class="w-full p-2 rounded form-input"></div>
+                    <div><label for="tags" class="block text-sm font-bold mb-1">Етикети (разделени със запетая)</label><input type="text" id="tags" name="tags" class="w-full p-2 rounded form-input"></div>
+                    <div class="flex justify-end gap-4 pt-4">
+                        <button type="button" id="cancelBtn" class="bg-gray-600 font-bold py-2 px-6 rounded-lg hover:bg-gray-700">Отказ</button>
+                        <button type="submit" class="bg-[#FF2D2D] font-bold py-2 px-6 rounded-lg hover:bg-red-700">Запази протеста</button>
+                    </div>
+                </form>
+                 <div id="formStatus" class="mt-4 text-center"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // --- CONFIG ---
+        const backendUrl = 'http://localhost:3001/api';
+
+        // --- DOM ELEMENTS ---
+        const pages = document.querySelectorAll('.page');
+        const navLinks = {
+            login: document.getElementById('loginNav'),
+            register: document.getElementById('registerNav'),
+            dashboard: document.getElementById('dashboardNav'),
+            logout: document.getElementById('logoutBtn')
+        };
+        const modal = document.getElementById('protestModal');
+
+        // --- ROUTING ---
+        function navigate(hash) {
+            pages.forEach(page => page.classList.remove('active'));
+            const activePage = document.getElementById(hash.substring(1)) || document.getElementById('home');
+            activePage.classList.add('active');
+            
+            if (hash === '#dashboard' && localStorage.getItem('organizerId')) {
+                loadDashboard();
+            } else if (hash === '#dashboard' && !localStorage.getItem('organizerId')) {
+                window.location.hash = '#login';
+            }
+        }
+
+        window.addEventListener('hashchange', () => navigate(window.location.hash));
+        
+        // --- AUTH & UI STATE ---
+        function updateUIForAuthState() {
+            const organizerId = localStorage.getItem('organizerId');
+            if (organizerId) {
+                navLinks.login.style.display = 'none';
+                navLinks.register.style.display = 'none';
+                navLinks.dashboard.style.display = 'inline-block';
+                navLinks.logout.style.display = 'inline-block';
+            } else {
+                navLinks.login.style.display = 'inline-block';
+                navLinks.register.style.display = 'inline-block';
+                navLinks.dashboard.style.display = 'none';
+                navLinks.logout.style.display = 'none';
+            }
+        }
+        
+        // --- DASHBOARD LOGIC ---
+        async function loadDashboard() {
+            const organizerId = localStorage.getItem('organizerId');
+            if (!organizerId) return;
+
+            const [orgRes, protestsRes, analyticsRes] = await Promise.all([
+                fetch(`${backendUrl}/organizers/${organizerId}`),
+                fetch(`${backendUrl}/organizers/${organizerId}/protests`),
+                fetch(`${backendUrl}/organizers/${organizerId}/analytics`)
+            ]);
+            
+            if (!orgRes.ok || !protestsRes.ok) {
+                logout();
+                return;
+            }
+            
+            const organizer = await orgRes.json();
+            const protests = await protestsRes.json();
+            const analytics = await analyticsRes.json();
+            
+            document.getElementById('orgName').textContent = organizer.name;
+            document.getElementById('followerCount').textContent = analytics.followers;
+            document.getElementById('interestCount').textContent = analytics.total_likes;
+            document.getElementById('clickCount').textContent = analytics.social_clicks;
+            
+            const upcomingContainer = document.getElementById('upcomingProtests');
+            const pastContainer = document.getElementById('pastProtests');
+            upcomingContainer.innerHTML = '';
+            pastContainer.innerHTML = '';
+            
+            const now = new Date();
+            protests.forEach(p => {
+                const protestDate = new Date(p.date);
+                const isUpcoming = protestDate >= now;
+                const container = isUpcoming ? upcomingContainer : pastContainer;
+                container.innerHTML += createProtestCard(p, isUpcoming);
+            });
+
+             document.querySelectorAll('.edit-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const protestId = e.target.closest('.edit-btn').dataset.id;
+                    const protestToEdit = protests.find(p => p.id == protestId);
+                    openProtestModal(protestToEdit);
+                });
+            });
+        }
+        
+        function createProtestCard(protest, isUpcoming) {
+             const protestDate = new Date(protest.date).toLocaleDateString('bg-BG');
+             return `
+                <div class="bg-[#28282f] p-4 rounded-lg flex justify-between items-center">
+                    <div>
+                        <p class="font-bold text-lg">${protest.name}</p>
+                        <p class="text-sm text-gray-400">${protestDate} в ${protest.time}</p>
+                    </div>
+                    ${isUpcoming ? `<button data-id="${protest.id}" class="edit-btn bg-[#4A4A4A] hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">Редактирай</button>` : ''}
+                </div>
+            `;
+        }
+        
+        // --- MODAL LOGIC ---
+        function openProtestModal(protest = null) {
+            const form = document.getElementById('protestForm');
+            form.reset();
+            document.getElementById('formStatus').textContent = '';
+            
+            if (protest) {
+                document.getElementById('modalTitle').textContent = 'Редактиране на протест';
+                document.getElementById('protestId').value = protest.id;
+                document.getElementById('name').value = protest.name;
+                document.getElementById('cause').value = protest.cause;
+                document.getElementById('location').value = protest.location;
+                document.getElementById('description').value = protest.description;
+                document.getElementById('date').value = new Date(protest.date).toISOString().split('T')[0];
+                document.getElementById('time').value = protest.time;
+                document.getElementById('lat').value = protest.lat;
+                document.getElementById('lng').value = protest.lng;
+                document.getElementById('official_link').value = protest.official_link;
+                document.getElementById('tags').value = protest.tags ? protest.tags.join(', ') : '';
+            } else {
+                document.getElementById('modalTitle').textContent = 'Добавяне на нов протест';
+                document.getElementById('protestId').value = '';
+            }
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+        
+        document.getElementById('addProtestBtn').addEventListener('click', () => openProtestModal());
+        document.getElementById('cancelBtn').addEventListener('click', closeModal);
+        modal.querySelector('.modal-backdrop').addEventListener('click', closeModal);
+
+        // --- API CALLS ---
+        
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const statusEl = document.getElementById('registerStatus');
+            const data = {
+                name: document.getElementById('regName').value,
+                email: document.getElementById('regEmail').value,
+                password: document.getElementById('regPassword').value,
+                bio: document.getElementById('regBio').value
+            };
+            
+            try {
+                const res = await fetch(`${backendUrl}/organizers/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (!res.ok) throw new Error((await res.json()).message);
+                
+                statusEl.textContent = 'Регистрацията е успешна! Моля, влезте в профила си.';
+                statusEl.style.color = '#A3D5E7';
+                setTimeout(() => window.location.hash = '#login', 2000);
+            } catch (err) {
+                statusEl.textContent = err.message;
+                statusEl.style.color = '#FF2D2D';
+            }
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const statusEl = document.getElementById('loginStatus');
+            const data = {
+                email: document.getElementById('loginEmail').value,
+                password: document.getElementById('loginPassword').value
+            };
+
+            try {
+                const res = await fetch(`${backendUrl}/organizers/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (!res.ok) throw new Error((await res.json()).message);
+                const result = await res.json();
+                
+                localStorage.setItem('organizerId', result.organizer.id);
+                updateUIForAuthState();
+                window.location.hash = '#dashboard';
+            } catch (err) {
+                statusEl.textContent = err.message;
+                statusEl.style.color = '#FF2D2D';
+            }
+        });
+
+        function logout() {
+            localStorage.removeItem('organizerId');
+            updateUIForAuthState();
+            window.location.hash = '#home';
+        }
+        navLinks.logout.addEventListener('click', logout);
+        
+        document.getElementById('protestForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const protestId = document.getElementById('protestId').value;
+            const isEditing = !!protestId;
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            data.tags = data.tags.split(',').map(tag => tag.trim());
+            data.organizer_id = localStorage.getItem('organizerId');
+
+            const url = isEditing ? `${backendUrl}/protests/${protestId}` : `${backendUrl}/protests`;
+            const method = isEditing ? 'PUT' : 'POST';
+
+            try {
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (!res.ok) throw new Error((await res.json()).message);
+                
+                document.getElementById('formStatus').textContent = `Протестът е ${isEditing ? 'актуализиран' : 'създаден'}!`;
+                loadDashboard();
+                setTimeout(closeModal, 1500);
+            } catch (err) {
+                 document.getElementById('formStatus').textContent = err.message;
+            }
+        });
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            updateUIForAuthState();
+            navigate(window.location.hash || '#home');
+        });
+    </script>
+</body>
+</html>
+
