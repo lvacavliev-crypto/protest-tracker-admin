@@ -8,7 +8,7 @@ const app = express();
 
 // --- CONFIGURATION ---
 const pool = new Pool({
-  connectionString: process.env.PROTEST_URL + "?sslmode=require", // Add sslmode=require
+  connectionString: process.env.PROTEST_URL + "?sslmode=require",
   ssl: {
     rejectUnauthorized: false
   }
@@ -18,15 +18,21 @@ const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-for-local-dev';
 app.use(cors());
 app.use(express.json());
 
-// --- DATABASE INITIALIZATION ---
-async function initializeDb() {
+// --- DATABASE INITIALIZATION WRAPPER ---
+// This function will hold our app until the database is ready.
+async function initializeApp() {
   let client;
   try {
     client = await pool.connect();
-    // Grant permissions - this is the key fix for Vercel Hobby tier
-    await client.query(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "${process.env.PGUSER}";`);
-    await client.query(`GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "${process.env.PGUSER}";`);
+    console.log("Connected to the database. Initializing tables...");
 
+    // Grant permissions needed for Vercel's environment
+    // Note: Vercel automatically provides PGUSER from the connected database.
+    await client.query(`GRANT ALL ON ALL TABLES IN SCHEMA public TO "${process.env.PGUSER}";`);
+    await client.query(`GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO "${process.env.PGUSER}";`);
+    console.log("Permissions granted.");
+
+    // Create tables if they don't exist
     await client.query(`
       CREATE TABLE IF NOT EXISTS organizers (
         id SERIAL PRIMARY KEY,
@@ -57,21 +63,18 @@ async function initializeDb() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('Database tables are successfully initialized.');
+    console.log('Database is ready.');
   } catch (err) {
-    console.error('FATAL: Error initializing database tables:', err.stack);
-    throw err; 
+    console.error('FATAL: Could not initialize database.', err.stack);
+    // If the DB fails, the app can't run. We throw the error
+    // to make sure it's visible in Vercel's logs.
+    throw new Error('Database initialization failed!');
   } finally {
     if (client) {
       client.release();
     }
   }
 }
-
-// Initialize and log any startup errors
-initializeDb().catch(err => {
-    console.error("Failed to start the server due to a database initialization error.", err);
-});
 
 // --- API ENDPOINTS ---
 
@@ -90,7 +93,12 @@ app.post('/api/organizers/register', async (req, res) => {
         res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error('[/api/organizers/register] Error:', err.stack);
-        res.status(500).json({ message: 'Error registering organizer. The email may already be in use.' });
+        // Check for unique violation error code
+        if (err.code === '23505') {
+             res.status(409).json({ message: 'Error: This email is already registered.' });
+        } else {
+             res.status(500).json({ message: 'A server error occurred during registration.' });
+        }
     }
 });
 
@@ -211,5 +219,33 @@ app.get('/', (req, res) => {
   res.send('Protest Tracker API is running.');
 });
 
-module.exports = app;
+// Create a new function that Vercel can run.
+// It will first initialize the DB and then start the Express app.
+const handler = async (req, res) => {
+    try {
+        // Ensure the database is initialized on the first request.
+        await initializeApp();
+        // Pass the request to the Express app.
+        app(req, res);
+    } catch (error) {
+        console.error("Handler Error:", error.stack);
+        res.status(500).send("Server initialization failed.");
+    }
+};
+
+// Vercel doesn't use app.listen. It just needs the exported app.
+// We modify this slightly to ensure initialization happens.
+let isInitialized = false;
+
+module.exports = async (req, res) => {
+    if (!isInitialized) {
+        try {
+            await initializeApp();
+            isInitialized = true;
+        } catch (error) {
+            return res.status(500).json({ message: "Server failed to initialize.", error: error.message });
+        }
+    }
+    return app(req, res);
+};
 
