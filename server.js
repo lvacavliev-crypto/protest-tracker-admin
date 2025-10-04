@@ -5,17 +5,14 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-const port = 3001;
 
-// Vercel injects the environment variable with the prefix, so we look for PROTEST_URL
+// --- CONFIGURATION ---
 const pool = new Pool({
-  connectionString: process.env.PROTEST_URL, // Use the prefixed variable name
+  connectionString: process.env.PROTEST_URL,
   ssl: {
     rejectUnauthorized: false
   }
 });
-
-// Vercel injects the JWT_SECRET environment variable
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-for-local-dev';
 
 app.use(cors());
@@ -23,9 +20,9 @@ app.use(express.json());
 
 // --- DATABASE INITIALIZATION ---
 async function initializeDb() {
-  const client = await pool.connect();
+  let client;
   try {
-    // Create Organizers Table
+    client = await pool.connect();
     await client.query(`
       CREATE TABLE IF NOT EXISTS organizers (
         id SERIAL PRIMARY KEY,
@@ -38,8 +35,6 @@ async function initializeDb() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    
-    // Create Protests Table
     await client.query(`
       CREATE TABLE IF NOT EXISTS protests (
         id SERIAL PRIMARY KEY,
@@ -58,40 +53,45 @@ async function initializeDb() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('Database tables are ready.');
+    console.log('Database tables are successfully initialized.');
   } catch (err) {
-    console.error('Error initializing database:', err);
+    console.error('FATAL: Error initializing database tables:', err.stack);
+    // If the DB fails to init, we shouldn't continue.
+    // This will help Vercel logs show the exact problem.
+    throw err; 
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 
-// Initialize the DB when the server starts
-initializeDb();
+// Initialize and log any startup errors
+initializeDb().catch(err => {
+    console.error("Failed to start the server due to a database initialization error.", err);
+});
 
 // --- API ENDPOINTS ---
 
-// Organizer Registration
 app.post('/api/organizers/register', async (req, res) => {
     const { name, email, password, bio } = req.body;
     if (!name || !email || !password) {
         return res.status(400).json({ message: 'Missing required fields.' });
     }
-    const salt = await bcrypt.genSalt(10);
-    const password_hash = await bcrypt.hash(password, salt);
     try {
+        const salt = await bcrypt.genSalt(10);
+        const password_hash = await bcrypt.hash(password, salt);
         const result = await pool.query(
             'INSERT INTO organizers (name, email, password_hash, bio) VALUES ($1, $2, $3, $4) RETURNING id, name, email',
             [name, email, password_hash, bio]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
-        console.error(err);
+        console.error('[/api/organizers/register] Error:', err.stack);
         res.status(500).json({ message: 'Error registering organizer. The email may already be in use.' });
     }
 });
 
-// Organizer Login
 app.post('/api/organizers/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -107,12 +107,11 @@ app.post('/api/organizers/login', async (req, res) => {
         const token = jwt.sign({ id: organizer.id }, JWT_SECRET, { expiresIn: '1d' });
         res.json({ token, organizerId: organizer.id });
     } catch (err) {
-        console.error(err);
+        console.error('[/api/organizers/login] Error:', err.stack);
         res.status(500).json({ message: 'Server error during login.' });
     }
 });
 
-// Middleware to authenticate token
 const auth = (req, res, next) => {
     const token = req.header('x-auth-token');
     if (!token) {
@@ -127,46 +126,42 @@ const auth = (req, res, next) => {
     }
 };
 
-// Get Organizer Details
 app.get('/api/organizers/:id', async (req, res) => {
     try {
         const result = await pool.query('SELECT id, name, email, bio, followers, social_clicks FROM organizers WHERE id = $1', [req.params.id]);
         res.json(result.rows[0]);
     } catch (err) {
-        console.error(err);
+        console.error(`[/api/organizers/:id] Error:`, err.stack);
         res.status(500).send('Server Error');
     }
 });
 
-// Get Protests for an Organizer
-app.get('/api/organizers/:id/protests', async (req, res) => {
+app.get('/api/organizers/:id/protests', auth, async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM protests WHERE organizer_id = $1 ORDER BY date DESC', [req.params.id]);
+        const result = await pool.query('SELECT * FROM protests WHERE organizer_id = $1 ORDER BY date DESC', [req.organizerId]);
         res.json(result.rows);
     } catch (err) {
-        console.error(err);
+        console.error(`[/api/organizers/:id/protests] Error:`, err.stack);
         res.status(500).send('Server Error');
     }
 });
 
-// Get Analytics for an Organizer
-app.get('/api/organizers/:id/analytics', async (req, res) => {
+app.get('/api/organizers/:id/analytics', auth, async (req, res) => {
      try {
-        const followersRes = await pool.query('SELECT followers FROM organizers WHERE id = $1', [req.params.id]);
-        const likesRes = await pool.query('SELECT SUM(likes) as total_likes FROM protests WHERE organizer_id = $1', [req.params.id]);
+        const followersRes = await pool.query('SELECT followers FROM organizers WHERE id = $1', [req.organizerId]);
+        const likesRes = await pool.query('SELECT SUM(likes) as total_likes FROM protests WHERE organizer_id = $1', [req.organizerId]);
         
         res.json({
             followers: followersRes.rows[0]?.followers || 0,
             total_likes: parseInt(likesRes.rows[0]?.total_likes, 10) || 0,
-            social_clicks: 0 // Placeholder
+            social_clicks: 0
         });
     } catch (err) {
-        console.error(err);
+        console.error(`[/api/organizers/:id/analytics] Error:`, err.stack);
         res.status(500).send('Server Error');
     }
 });
 
-// Create a new protest
 app.post('/api/protests', auth, async (req, res) => {
     const { name, cause, description, location, latitude, longitude, date, time, official_link, tags } = req.body;
     const tagsArray = tags ? tags.split(',').map(tag => tag.trim()) : [];
@@ -177,12 +172,11 @@ app.post('/api/protests', auth, async (req, res) => {
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
-        console.error(err);
+        console.error(`[/api/protests] POST Error:`, err.stack);
         res.status(500).send('Server Error');
     }
 });
 
-// Update a protest
 app.put('/api/protests/:id', auth, async (req, res) => {
     const { name, cause, description, location, latitude, longitude, date, time, official_link, tags } = req.body;
     const tagsArray = tags ? tags.split(',').map(tag => tag.trim()) : [];
@@ -196,33 +190,28 @@ app.put('/api/protests/:id', auth, async (req, res) => {
         }
         res.json(result.rows[0]);
     } catch (err) {
-        console.error(err);
+        console.error(`[/api/protests/:id] PUT Error:`, err.stack);
         res.status(500).send('Server Error');
     }
 });
 
-// --- PUBLIC API for the App ---
 app.get('/api/protests', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM protests WHERE date >= CURRENT_DATE ORDER BY date, time');
         res.json(result.rows);
     } catch (err) {
-        console.error(err);
+        console.error(`[/api/protests] GET Error:`, err.stack);
         res.status(500).send('Server Error');
     }
 });
 
-// A catch-all for the root, so Vercel knows the server is running.
 app.get('/', (req, res) => {
   res.send('Protest Tracker API is running.');
 });
 
-app.listen(port, () => {
-  console.log(`Server listening at http://localhost:${port}`);
-});
-
-// Export the app for Vercel's serverless environment
 module.exports = app;
+
+
 
 
 
