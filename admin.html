@@ -314,7 +314,6 @@
                 document.getElementById('tags').value = protest.tags ? protest.tags.join(', ') : '';
             } else {
                 modalTitle.textContent = 'Добави нов протест';
-                document.getElementById('protestId').value = '';
             }
             modal.style.display = 'flex';
         }
@@ -331,9 +330,6 @@
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const statusDiv = document.getElementById('registerStatus');
-            statusDiv.textContent = 'Registering...';
-            statusDiv.style.color = 'white';
-
             const formData = new FormData(e.target);
             const data = Object.fromEntries(formData.entries());
             
@@ -344,17 +340,16 @@
                     body: JSON.stringify(data)
                 });
 
+                const result = await res.json();
                 if (res.ok) {
-                    statusDiv.textContent = 'Успешна регистрация! Моля, влезте.';
+                    statusDiv.textContent = 'Registration successful! Please log in.';
                     statusDiv.style.color = 'lightgreen';
-                    setTimeout(() => window.location.hash = '#login', 1500);
+                    window.location.hash = '#login';
                 } else {
-                    const error = await res.json();
-                    statusDiv.textContent = error.message;
+                    statusDiv.textContent = result.message || 'An unknown error occurred.';
                     statusDiv.style.color = 'salmon';
                 }
-            } catch (err) {
-                console.error("Fetch Error:", err);
+            } catch (error) {
                 statusDiv.textContent = 'Failed to connect to server. Please try again later.';
                 statusDiv.style.color = 'salmon';
             }
@@ -363,30 +358,27 @@
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const statusDiv = document.getElementById('loginStatus');
-            statusDiv.textContent = 'Logging in...';
-            statusDiv.style.color = 'white';
             const formData = new FormData(e.target);
             const data = Object.fromEntries(formData.entries());
-            
-            try {
+
+             try {
                 const res = await fetch(`${backendUrl}/organizers/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
-
+                
+                const result = await res.json();
                 if (res.ok) {
-                    const { token, organizerId } = await res.json();
-                    localStorage.setItem('token', token);
-                    localStorage.setItem('organizerId', organizerId);
+                    localStorage.setItem('token', result.token);
+                    localStorage.setItem('organizerId', result.organizerId);
                     updateUIForAuthState();
                     window.location.hash = '#dashboard';
                 } else {
-                    statusDiv.textContent = 'Невалидни данни.';
+                    statusDiv.textContent = result.message || 'Invalid credentials.';
                     statusDiv.style.color = 'salmon';
                 }
-            } catch (err) {
-                console.error("Fetch Error:", err);
+            } catch (error) {
                 statusDiv.textContent = 'Failed to connect to server. Please try again later.';
                 statusDiv.style.color = 'salmon';
             }
@@ -395,11 +387,8 @@
         document.getElementById('protestForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const statusDiv = document.getElementById('formStatus');
-            statusDiv.textContent = 'Saving...';
-            statusDiv.style.color = 'white';
             const protestId = document.getElementById('protestId').value;
             const token = localStorage.getItem('token');
-            
             const formData = new FormData(e.target);
             const data = Object.fromEntries(formData.entries());
             
@@ -416,18 +405,17 @@
                     body: JSON.stringify(data)
                 });
 
+                const result = await res.json();
                 if (res.ok) {
-                    statusDiv.textContent = 'Протестът е запазен!';
+                    statusDiv.textContent = 'Protest saved!';
                     statusDiv.style.color = 'lightgreen';
                     loadDashboard();
                     setTimeout(closeModal, 1000);
                 } else {
-                    const error = await res.json();
-                    statusDiv.textContent = error.message;
+                    statusDiv.textContent = result.message || 'An error occurred.';
                     statusDiv.style.color = 'salmon';
                 }
-            } catch(err) {
-                console.error("Fetch Error:", err);
+            } catch (error) {
                 statusDiv.textContent = 'Failed to connect to server. Please try again later.';
                 statusDiv.style.color = 'salmon';
             }
