@@ -34,7 +34,7 @@ async function initializeDatabase() {
         name VARCHAR(255) NOT NULL,
         cause VARCHAR(255),
         description TEXT,
-        location VARCHAR(255),
+        location TEXT,
         latitude NUMERIC(10, 7),
         longitude NUMERIC(10, 7),
         date DATE NOT NULL,
