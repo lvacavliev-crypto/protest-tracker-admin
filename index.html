@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protest Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Work+Sans:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Work Sans', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        .font-anton { font-family: 'Anton', sans-serif; text-transform: uppercase; letter-spacing: 0.05em; }
+        .font-black { font-weight: 900; }
+
+        @keyframes slideUpFromBottom {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        @keyframes slideDownToBottom {
+            from { transform: translateY(0); }
+            to { transform: translateY(100%); }
+        }
+        .animate-slide-up { animation: slideUpFromBottom 0.4s ease-out; }
+        .animate-slide-down { animation: slideDownToBottom 0.3s ease-in; }
+    </style>
+</head>
+<body class="bg-black">
+
+    <div id="app-container" class="relative w-full h-screen overflow-hidden flex flex-col bg-black">
+        <!-- Main App UI will be rendered here by JavaScript -->
+    </div>
+
+<script>
+    const API_URL = 'https://YOUR-VERCEL-URL.vercel.app/api'; // CHANGE THIS after deployment
+
+    const palette = {
+      background: '#000000', text: '#FFFFFF', primary: '#FF2D2D', secondary: '#A3D5E7',
+      darkPanel: '#13131a', lightPanel: '#28282f', textMuted: 'rgba(255,255,255,0.7)',
+    };
+
+    let state = {
+        selectedProtest: null,
+        showDetailedView: false,
+        protestData: [],
+        likedProtests: {},
+        followedOrganizers: {},
+        notifications: [],
+        deviceId: 'device_' + Math.random().toString(36).substr(2, 9),
+        activeTab: 'map',
+        listFilter: 'date',
+        listView: 'all',
+        showNotifications: false,
+        dragStart: 0,
+        dragOffset: 0,
+        isClosing: false,
+    };
+
+    const centerLat = 42.6977;
+    const centerLng = 23.3219;
+
+    // Fetch protests from API
+    async function fetchProtests() {
+        try {
+            const response = await fetch(`${API_URL}/protests`);
+            const data = await response.json();
+            return data.protests || [];
+        } catch (error) {
+            console.error('Error fetching protests:', error);
+            // Return mock data if API fails (for testing before deployment)
+            return [
+                { id: 1, name: "Climate Action Rally", cause: "Environmental Protection", description: "Join us for a peaceful demonstration calling for stronger climate policies and renewable energy investment.", lat: 42.6977, lng: 23.3219, date: "2025-10-15", time: "14:00", location: "National Palace of Culture, Sofia", organizer: "Climate Justice Now", organizerId: 1, attendees: 500, likes: 145, officialLink: "https://example.com/climate-rally", tags: ["Environment", "Climate"], distance: 1.2 },
+                { id: 2, name: "Workers Rights March", cause: "Labor Rights", description: "March for fair wages, better working conditions, and stronger labor protections.", lat: 42.7008, lng: 23.3297, date: "2025-10-18", time: "10:00", location: "Sofia University", organizer: "Labor Union Coalition", organizerId: 2, attendees: 300, likes: 89, officialLink: "https://example.com/workers-march", tags: ["Labor", "Workers Rights"], distance: 2.5 }
+            ];
+        }
+    }
+
+    // Toggle like on backend
+    async function toggleLike(protestId) {
+        const key = state.deviceId + '_' + protestId;
+        const wasLiked = !!state.likedProtests[key];
+        const newLikedProtests = { ...state.likedProtests };
+        const protestDataCopy = [...state.protestData];
+        const protestIndex = protestDataCopy.findIndex(p => p.id === protestId);
+
+        if (wasLiked) {
+            delete newLikedProtests[key];
+            protestDataCopy[protestIndex].likes--;
+        } else {
+            newLikedProtests[key] = true;
+            protestDataCopy[protestIndex].likes++;
+        }
+
+        try {
+            await fetch(`${API_URL}/protests/${protestId}/like`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ liked: !wasLiked })
+            });
+        } catch (error) {
+            console.error('Error toggling like:', error);
+        }
+
+        setState({ likedProtests: newLikedProtests, protestData: protestDataCopy });
+    }
+
+    // Toggle follow on backend
+    async function toggleFollow(organizerId) {
+        const key = state.deviceId + '_' + organizerId;
+        const wasFollowing = !!state.followedOrganizers[key];
+        const newFollowedOrganizers = { ...state.followedOrganizers };
+
+        if (wasFollowing) {
+            delete newFollowedOrganizers[key];
+        } else {
+            newFollowedOrganizers[key] = true;
+        }
+
+        try {
+            await fetch(`${API_URL}/organizers/${organizerId}/follow`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ following: !wasFollowing })
+            });
+        } catch (error) {
+            console.error('Error toggling follow:', error);
+        }
+
+        setState({ followedOrganizers: newFollowedOrganizers });
+    }
+    
+    function render() {
+        const appContainer = document.getElementById('app-container');
+        const isLiked = (id) => !!state.likedProtests[state.deviceId + '_' + id];
+        const isFollowing = (id) => !!state.followedOrganizers[state.deviceId + '_' + id];
+
+        const getFilteredProtests = () => {
+            let filtered = state.protestData;
+            if (state.listView === 'liked') filtered = state.protestData.filter(p => isLiked(p.id));
+            if (state.listFilter === 'date') return filtered.sort((a, b) => new Date(`${a.date} ${a.time}`) - new Date(`${b.date} ${b.time}`));
+            return filtered.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+        };
+        
+        const unreadCount = state.notifications.filter(n => !n.read).length;
+
+        let protestPanelHTML = '';
+        if (state.selectedProtest) {
+            const protest = state.selectedProtest;
+            const protestContentHTML = !state.showDetailedView ? `
+                <h2 class="text-3xl font-black mb-2 uppercase tracking-wide text-white">${protest.name}</h2>
+                <div class="inline-block px-4 py-2 text-sm font-black uppercase tracking-wider mb-4 transform -skew-x-12" style="background-color: ${palette.secondary}; color: ${palette.background};"><span class="block transform skew-x-12">${protest.cause || 'General'}</span></div>
+                <div class="space-y-4 mb-4 text-white/90">
+                    <div class="flex items-start gap-3 border-l-4 pl-3" style="border-color: ${palette.secondary};"><span class="text-xl mt-1">📅</span><div><p class="text-sm font-black uppercase text-white/70">Date & Time</p><p class="font-bold">${protest.date} at ${protest.time}</p></div></div>
+                    <div class="flex items-start gap-3 border-l-4 pl-3" style="border-color: ${palette.secondary};"><span class="text-xl mt-1">📍</span><div><p class="text-sm font-black uppercase text-white/70">Location</p><p class="font-bold">${protest.location}</p></div></div>
+                    ${protest.likes > 200 ? `<div class="flex items-start gap-3 border-l-4 pl-3" style="border-color: ${palette.secondary};"><span class="text-xl mt-1">👥</span><div><p class="text-sm font-black uppercase text-white/70">Expected</p><p class="font-bold">${protest.attendees || 0}+ people</p></div></div>` : ''}
+                    <div class="flex items-start gap-3 border-l-4 pl-3" style="border-color: ${palette.secondary};"><span class="text-xl mt-1">👤</span><div class="flex-1"><p class="text-sm font-black uppercase text-white/70">Organizer</p><p class="font-bold text-base">${protest.organizer}</p><div class="flex items-center justify-start gap-2 mt-2"><button id="followBtn" class="px-3 py-1 font-black text-xs uppercase rounded-lg transition-transform hover:scale-105" style="background-color: ${isFollowing(protest.organizerId) ? palette.darkPanel : palette.secondary}; color: ${isFollowing(protest.organizerId) ? palette.text : palette.background};">${isFollowing(protest.organizerId) ? '✓ Following' : '+ Follow'}</button></div></div></div>
+                </div>
+                <button id="likeBtn" class="w-full flex items-center justify-center gap-2 p-4 mb-3 font-black uppercase tracking-wide transition-all transform hover:scale-105" style="clip-path: polygon(2% 0, 100% 0, 98% 100%, 0 100%); border: none; background-color: ${isLiked(protest.id) ? palette.primary : palette.darkPanel}; color: ${palette.text};"><span class="text-2xl">${isLiked(protest.id) ? '🤍' : '❤️'}</span><span class="text-sm">${protest.likes} ${isLiked(protest.id) ? "YOU'RE INTERESTED" : "SHOW INTEREST"}</span></button>
+                <button id="fullDetailsBtn" class="w-full font-black py-4 px-4 flex items-center justify-center gap-2 transition-all uppercase tracking-wider hover:opacity-90" style="clip-path: polygon(0 0, 100% 2%, 100% 100%, 0 98%); border: none; background-color: ${palette.secondary}; color: ${palette.background};"><span>FULL DETAILS →</span></button>
+            ` : `
+                <div class="flex items-center justify-between mb-3"><h2 class="text-lg font-black uppercase tracking-wide text-white">FULL DETAILS</h2><button id="lessDetailsBtn" class="px-4 py-2 font-black text-sm uppercase rounded-lg" style="background-color: ${palette.lightPanel}; color: ${palette.text};">← Less</button></div>
+                <h1 class="text-4xl font-black mb-3 uppercase tracking-wide leading-tight text-white">${protest.name}</h1>
+                <div class="flex flex-wrap gap-2 mb-6"><span class="px-4 py-2 text-sm font-black uppercase tracking-wider transform -skew-x-12" style="background-color: ${palette.secondary}; color: ${palette.background};"><span class="block transform skew-x-12">${protest.cause || 'General'}</span></span>${(protest.tags || []).map(tag => `<span class="px-3 py-1 text-sm font-bold" style="background-color: ${palette.darkPanel}; color: ${palette.text};">${tag}</span>`).join('')}</div>
+                <div class="p-6 mb-6 space-y-4" style="background-color: ${palette.darkPanel}; border: 4px solid ${palette.primary};">
+                    <div class="flex items-start gap-3 border-l-4 pl-4" style="border-color: ${palette.secondary};"><span class="text-2xl mt-1">📅</span><div><p class="text-sm font-black uppercase text-white/70">Date & Time</p><p class="text-lg font-bold text-white">${protest.date} at ${protest.time}</p></div></div>
+                    <div class="flex items-start gap-3 border-l-4 pl-4" style="border-color: ${palette.secondary};"><span class="text-xl mt-1">📍</span><div><p class="text-sm font-black uppercase text-white/70">Location</p><p class="text-lg font-bold text-white">${protest.location}</p></div></div>
+                    ${protest.likes > 200 ? `<div class="flex items-start gap-3 border-l-4 pl-4" style="border-color: ${palette.secondary};"><span class="text-2xl mt-1">👥</span><div><p class="text-sm font-black uppercase text-white/70">Expected Attendees</p><p class="text-lg font-bold text-white">${protest.attendees || 0}+ people</p></div></div>` : ''}
+                    <div class="flex items-start gap-3 border-l-4 pl-4" style="border-color: ${palette.secondary};"><span class="text-2xl mt-1">❤️</span><div><p class="text-sm font-black uppercase text-white/70">People Interested</p><p class="text-lg font-bold text-white">${protest.likes} people</p></div></div>
+                    <div class="flex items-start gap-3 border-l-4 pl-4" style="border-color: ${palette.secondary};"><span class="text-2xl mt-1">👤</span><div class="flex-1"><p class="text-sm font-black uppercase text-white/70">Organized by</p><p class="text-lg font-bold text-white">${protest.organizer}</p><div class="flex items-center justify-start mt-2 gap-2"><button id="followBtn" class="px-4 py-2 font-black text-sm uppercase rounded-lg transition-transform hover:scale-105" style="background-color: ${isFollowing(protest.organizerId) ? palette.darkPanel : palette.secondary}; color: ${isFollowing(protest.organizerId) ? palette.text : palette.background};">${isFollowing(protest.organizerId) ? '✓ Following' : '+ Follow'}</button></div></div></div>
+                </div>
+                <button id="likeBtn" class="w-full flex items-center justify-center gap-3 p-5 mb-6 font-black uppercase tracking-wide transition-all" style="clip-path: polygon(1% 0, 100% 0, 99% 100%, 0 100%); border: none; background-color: ${isLiked(protest.id) ? palette.primary : palette.darkPanel}; color: ${palette.text};"><span class="text-3xl">${isLiked(protest.id) ? '🤍' : '❤️'}</span><span class="text-lg">${isLiked(protest.id) ? "YOU'RE INTERESTED" : "SHOW INTEREST"}</span></button>
+                <div class="mb-6 p-6" style="background-color: ${palette.darkPanel}; border-left: 8px solid ${palette.secondary};"><h3 class="text-2xl font-black mb-3 uppercase tracking-wide text-white">ABOUT THIS PROTEST</h3><p class="leading-relaxed font-medium text-white/90">${protest.description || 'No description provided.'}</p></div>
+                ${protest.officialLink ? `<a href="${protest.officialLink}" target="_blank" rel="noopener noreferrer" class="block w-full font-black py-5 px-4 text-center transition-all uppercase tracking-wider text-lg hover:opacity-90" style="clip-path: polygon(0 2%, 100% 0, 100% 98%, 0 100%); background-color: ${palette.secondary}; color: ${palette.background};">VISIT OFFICIAL PAGE →</a>` : ''}
+            `;
+
+            protestPanelHTML = `
+                <div id="protestPanel" class="absolute bottom-0 left-0 right-0 z-40 shadow-2xl ${state.isClosing ? 'animate-slide-down' : 'animate-slide-up'}" style="transform: translateY(${state.dragOffset}px); max-height: ${state.showDetailedView ? '85vh' : '60vh'}; background-color: ${palette.background}; border-top: 8px solid ${palette.primary}; transition: ${state.dragOffset > 0 ? 'none' : 'max-height 0.4s ease-out'};">
+                    <div id="dragHandle" class="flex justify-center pt-4 pb-2 cursor-grab active:cursor-grabbing"><div class="w-16 h-2 transform -skew-x-12" style="background-color: ${palette.secondary};"></div></div>
+                    <div class="px-6 pb-6 overflow-y-auto" style="max-height: ${state.showDetailedView ? 'calc(85vh - 40px)' : 'calc(60vh - 40px)'};">
+                        ${protestContentHTML}
+                    </div>
+                </div>
+            `;
+        }
+
+        const backdropHTML = (state.selectedProtest) ? `<div id="backdrop" class="absolute inset-0 z-30 bg-black/70 transition-opacity duration-300 ${state.isClosing ? 'opacity-0' : 'opacity-100'}"></div>` : '';
+
+        appContainer.innerHTML = `
+            ${backdropHTML}
+            <div class="absolute top-0 left-0 right-0 z-20 px-6 py-6 pointer-events-none" style="background: linear-gradient(to bottom, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0) 100%);">
+                <div class="pointer-events-auto flex justify-between items-start">
+                    <div>
+                        <h1 class="text-3xl font-anton tracking-wider text-white">PROTEST TRACKER</h1>
+                        <p class="text-sm font-bold mt-1 tracking-wide" style="color: ${palette.secondary};">${getFilteredProtests().length} UPCOMING MOVEMENTS</p>
+                    </div>
+                    <a href="/admin.html" class="text-3xl hover:opacity-80 transition-opacity" title="Admin Portal">🔒</a>
+                </div>
+            </div>
+
+            <div class="absolute top-24 right-6 z-50 rounded-full shadow-2xl transition-all duration-300 ease-out" style="background-color: ${palette.primary}; width: ${state.showNotifications ? '20rem' : '3.5rem'}; height: ${state.showNotifications ? '24rem' : '3.5rem'}; max-height: 24rem; border-radius: ${state.showNotifications ? '1rem' : '50%'};">
+                ${!state.showNotifications ? `
+                    <button id="openNotifsBtn" class="w-full h-full flex items-center justify-center transform hover:scale-110 transition-transform">
+                        <span class="text-2xl">🔔</span>
+                        ${unreadCount > 0 ? `<span class="absolute -top-1 -right-1 text-black text-xs font-black rounded-full w-6 h-6 flex items-center justify-center" style="background-color: ${palette.secondary}; color: ${palette.background};">${unreadCount}</span>` : ''}
+                    </button>
+                ` : `
+                    <div class="w-full h-full flex flex-col">
+                        <div class="p-4 flex items-center justify-between rounded-t-lg" style="background-color: ${palette.primary};"><h3 class="font-black uppercase tracking-wide text-white">NOTIFICATIONS</h3><button id="closeNotifsBtn" class="hover:opacity-80 text-xl text-white">✕</button></div>
+                        <div class="flex-1 overflow-y-auto rounded-b-lg" style="background-color: ${palette.darkPanel};">
+                            ${state.notifications.length === 0 ? `<p class="p-4 text-center font-bold" style="color: ${palette.textMuted};">NO ALERTS</p>` : state.notifications.map(n => `<div class="p-4" style="background-color: ${n.read ? 'transparent' : 'rgba(255,45,45,0.2)'}; border-bottom: 1px solid rgba(255,255,255,0.1);"><p class="text-sm font-bold text-white">${n.message}</p></div>`).join('')}
+                        </div>
+                    </div>
+                `}
+            </div>
+
+            ${state.activeTab === 'map' ? `
+                <div class="flex-1 relative">
+                    <div class="absolute inset-0" style="background-color: ${palette.darkPanel};">
+                        <svg class="w-full h-full opacity-10"><defs><pattern id="angledgrid" width="80" height="80" patternUnits="userSpaceOnUse" patternTransform="rotate(15)"><path d="M 0 0 L 80 0 M 0 0 L 0 80" fill="none" stroke="${palette.secondary}" stroke-width="1"/></pattern></defs><rect width="100%" height="100%" fill="url(#angledgrid)" /></svg>
+                        ${state.protestData.map(p => {
+                            const isSelected = state.selectedProtest && state.selectedProtest.id === p.id;
+                            return `<button data-protest-id="${p.id}" class="protest-marker absolute transition-all hover:scale-110" style="left: ${((p.lng - centerLng) * 8000) + 50}%; top: ${((centerLat - p.lat) * 8000) + 50}%; z-index: ${isSelected ? 20 : 10}; transform: ${isSelected ? 'translateX(-50%) translateY(-100%) scale(1.25)' : 'translateX(-50%) translateY(-100%)'};"><div class="${isSelected ? 'animate-pulse' : ''}"><div class="w-12 h-12 rounded-full shadow-2xl flex items-center justify-center" style="background-color: ${isSelected ? palette.secondary : palette.primary};"><div class="w-4 h-4 rounded-full bg-white"></div></div><div class="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-8 h-2 bg-black opacity-40 blur-sm"></div></div></button>`
+                        }).join('')}
+                    </div>
+                </div>
+            ` : `
+                <div class="flex-1 overflow-y-auto" style="background-color: ${palette.darkPanel};">
+                    <div class="sticky top-0 p-4 z-10 mt-20" style="background-color: ${palette.darkPanel}; border-bottom: 4px solid ${palette.primary};">
+                        <div class="flex gap-3 mb-3">
+                            <button data-view="all" class="list-view-btn flex-1 py-3 px-4 font-black uppercase tracking-wide transform -skew-x-6 transition-all" style="background-color: ${state.listView === 'all' ? palette.primary : palette.lightPanel}; color: ${palette.text};"><span class="block transform skew-x-6">ALL</span></button>
+                            <button data-view="liked" class="list-view-btn flex-1 py-3 px-4 font-black uppercase tracking-wide transform skew-x-6 transition-all" style="background-color: ${state.listView === 'liked' ? palette.primary : palette.lightPanel}; color: ${palette.text};"><span class="block transform -skew-x-6">❤️ SAVED</span></button>
+                        </div>
+                        <div class="flex gap-3">
+                            <button data-filter="date" class="list-filter-btn flex-1 py-2 px-4 font-bold text-sm uppercase transform -rotate-1 transition-all" style="background-color: ${state.listFilter === 'date' ? palette.primary : palette.lightPanel}; color: ${palette.text};">BY DATE</button>
+                            <button data-filter="distance" class="list-filter-btn flex-1 py-2 px-4 font-bold text-sm uppercase transform rotate-1 transition-all" style="background-color: ${state.listFilter === 'distance' ? palette.primary : palette.lightPanel}; color: ${palette.text};">BY DISTANCE</button>
+                        </div>
+                    </div>
+                    <div class="p-4 space-y-4">
+                        ${getFilteredProtests().map((p, i) => `
+                            <div data-protest-id="${p.id}" class="protest-card p-4 hover:shadow-2xl transition-all cursor-pointer transform hover:-translate-y-1" style="background-color: ${palette.lightPanel}; border-left: 8px solid ${palette.primary}; transform: rotate(${i % 2 === 0 ? '0.5' : '-0.5'}deg); border-right: 4px solid rgba(255,255,255,0.1);">
+                                <div class="flex justify-between items-start mb-2"><h3 class="font-black flex-1 uppercase text-lg tracking-wide text-white">${p.name}</h3>${isLiked(p.id) ? `<span class="text-2xl" style="color: ${palette.primary};">❤️</span>` : ''}</div>
+                                <div class="inline-block px-3 py-1 text-xs font-black uppercase tracking-wider mb-3 transform -skew-x-12" style="background-color: ${palette.secondary}; color: ${palette.background};"><span class="block transform skew-x-12">${p.cause || 'General'}</span></div>
+                                <div class="text-sm space-y-1 font-bold" style="color: ${palette.textMuted};"><p>📅 ${p.date} • ${p.time}</p><p>📍 ${p.location}${p.distance ? ` • ${p.distance}KM` : ''}</p><p>❤️ ${p.likes} • 👥 ${p.attendees || 0}+</p></div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `}
+            
+            <div class="border-t-4 flex z-30" style="background-color: ${palette.darkPanel}; border-color: ${palette.primary};">
+                <button data-tab="map" class="tab-btn flex-1 py-4 flex flex-col items-center justify-center transition-all" style="background-color: ${state.activeTab === 'map' ? palette.primary : palette.lightPanel}; transform: ${state.activeTab === 'map' ? 'scale(1.05)' : 'scale(1)'};"><svg class="w-8 h-8" fill="${palette.text}" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg><span class="font-black text-xs mt-1 uppercase tracking-wide" style="color: ${palette.text};">Map</span></button>
+                <button data-tab="list" class="tab-btn flex-1 py-4 flex flex-col items-center justify-center transition-all" style="background-color: ${state.activeTab === 'list' ? palette.primary : palette.lightPanel}; transform: ${state.activeTab === 'list' ? 'scale(1.05)' : 'scale(1)'};"><svg class="w-8 h-8" fill="${palette.text}" viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg><span class="font-black text-xs mt-1 uppercase tracking-wide" style="color: ${palette.text};">List</span></button>
+            </div>
+            ${protestPanelHTML}
+        `;
+        addEventListeners();
+    }
+
+    function setState(newState) {
+        state = { ...state, ...newState };
+        render();
+    }
+    
+    function handleMarkerClick(protest) {
+        setState({ selectedProtest: protest, showDetailedView: false, dragOffset: 0, isClosing: false });
+    }
+
+    function closePanel() {
+        setState({ isClosing: true });
+        setTimeout(() => setState({ selectedProtest: null, isClosing: false }), 300);
+    }
+
+    function addEventListeners() {
+        // Tab navigation
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.onclick = () => setState({ activeTab: btn.dataset.tab }));
+
+        // Map marker clicks
+        document.querySelectorAll('.protest-marker').forEach(marker => {
+            marker.onclick = () => {
+                const protest = state.protestData.find(p => p.id == marker.dataset.protestId);
+                handleMarkerClick(protest);
+            }
+        });
+
+        // List card clicks
+        document.querySelectorAll('.protest-card').forEach(card => {
+            card.onclick = () => {
+                const protest = state.protestData.find(p => p.id == card.dataset.protestId);
+                setState({ activeTab: 'map' });
+                setTimeout(() => handleMarkerClick(protest), 50);
+            }
+        });
+
+        // List filters
+        document.querySelectorAll('.list-view-btn').forEach(btn => btn.onclick = () => setState({ listView: btn.dataset.view }));
+        document.querySelectorAll('.list-filter-btn').forEach(btn => btn.onclick = () => setState({ listFilter: btn.dataset.filter }));
+        
+        // Notifications
+        const openNotifsBtn = document.getElementById('openNotifsBtn');
+        if (openNotifsBtn) openNotifsBtn.onclick = () => setState({ showNotifications: true });
+        const closeNotifsBtn = document.getElementById('closeNotifsBtn');
+        if (closeNotifsBtn) closeNotifsBtn.onclick = () => setState({ showNotifications: false });
+
+        // Protest Panel interactions
+        const protestPanel = document.getElementById('protestPanel');
+        if (protestPanel) {
+            const dragHandle = document.getElementById('dragHandle');
+            const handleTouchStart = (e) => setState({ dragStart: e.touches[0].clientY });
+            const handleTouchMove = (e) => {
+                const delta = e.touches[0].clientY - state.dragStart;
+                if (delta > 0) setState({ dragOffset: delta });
+            };
+            const handleTouchEnd = () => {
+                if (state.dragOffset > 100) closePanel();
+                else setState({ dragOffset: 0 });
+            };
+            dragHandle.addEventListener('touchstart', handleTouchStart);
+            dragHandle.addEventListener('touchmove', handleTouchMove);
+            dragHandle.addEventListener('touchend', handleTouchEnd);
+            
+            const fullDetailsBtn = document.getElementById('fullDetailsBtn');
+            if(fullDetailsBtn) fullDetailsBtn.onclick = () => setState({ showDetailedView: true });
+
+            const lessDetailsBtn = document.getElementById('lessDetailsBtn');
+            if(lessDetailsBtn) lessDetailsBtn.onclick = () => setState({ showDetailedView: false });
+            
+            const likeBtn = document.getElementById('likeBtn');
+            if(likeBtn) likeBtn.onclick = () => toggleLike(state.selectedProtest.id);
+
+            const followBtn = document.getElementById('followBtn');
+            if(followBtn) followBtn.onclick = () => toggleFollow(state.selectedProtest.organizerId);
+        }
+
+        const backdrop = document.getElementById('backdrop');
+        if (backdrop) backdrop.onclick = closePanel;
+    }
+
+    // Initial load - fetch protests from API
+    fetchProtests().then(protests => {
+        state.protestData = protests;
+        render();
+    });
+</script>
+</body>
+</html>
